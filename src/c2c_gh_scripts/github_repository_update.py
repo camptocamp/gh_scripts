@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from github import Github, GithubException
+from github import GithubException
 
 from .utils import _build_github_client, setup_logging
 

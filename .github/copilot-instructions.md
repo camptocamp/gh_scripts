@@ -30,6 +30,7 @@
 - Team permissions are encoded as `team_name:permission_level`; do not change this format without updating all related readers/writers.
 - For user exports, internal members primarily have teams populated; external collaborators may have both teams and repositories populated. Do not silently change this behaviour.
 - Reuse the existing dataclasses fields and naming patterns when extending models.
+ - Always run `pre-commit run --all-files` (ruff lint + format) on any files you create or modify before committing.
 
 ## Environment and Pitfalls
 - GitHub authentication is constructed via utils._build_github_client(). Prefer the GITHUB_TOKEN environment variable; the hardcoded fallback path `/home/afayolle/.github_token2` is user-specific and should not be relied on in new code.

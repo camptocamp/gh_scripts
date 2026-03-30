@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 import csv
 import sys
 
-from github import Github
 from .utils import _build_github_client
 
 
