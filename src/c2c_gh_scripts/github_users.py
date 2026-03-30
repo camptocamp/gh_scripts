@@ -87,7 +87,7 @@ def retrieve_github_users(organisation: str) -> List[UserInfo]:
 
     # Populate repositories for external users only.
     for repo in org.get_repos(type="all"):
-        for collaborator in repo.get_collaborators():
+        for collaborator in repo.get_collaborators(affiliation="outside"):
             login = collaborator.login
             logger.info("Checking repository '%s' for user %s", repo.name, login)
             user = users.get(login)
