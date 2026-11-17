@@ -1,7 +1,8 @@
-"""Loading of the YAML configuration files."""
+"""Loading and writing of the YAML configuration files."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -210,3 +211,67 @@ def _parse_repository(document: Dict[str, Any], source: str, issues: List[Issue]
         forked=forked,
         source=source,
     )
+
+
+def _file_stem(name: str) -> str:
+    return re.sub(r"[^\w.\- ]", "_", name).lstrip(".") or "_"
+
+
+def team_to_dict(team: Team) -> Dict[str, Any]:
+    """Return the YAML representation of a team (stable key order)."""
+    data: Dict[str, Any] = {
+        "type": "team",
+        "name": team.name,
+        "maintainers": sorted(team.maintainers),
+        "members": sorted(team.members),
+    }
+    if team.parent:
+        data["parent"] = team.parent
+    return data
+
+
+def repository_to_dict(repo: Repository) -> Dict[str, Any]:
+    """Return the YAML representation of a repository (stable key order)."""
+    data: Dict[str, Any] = {
+        "type": "repository",
+        "name": repo.name,
+        "visibility": repo.visibility,
+        "description": repo.description,
+        "topics": sorted(repo.topics),
+        "teams": dict(sorted(repo.teams.items())),
+    }
+    if repo.users:
+        data["users"] = dict(sorted(repo.users.items()))
+    if repo.archived:
+        data["archived"] = True
+    if repo.forked:
+        data["forked"] = repo.forked
+    return data
+
+
+def dump_record(record: Dict[str, Any]) -> str:
+    return yaml.safe_dump(record, sort_keys=False, allow_unicode=True)
+
+
+def write_config(config: OrgConfig, path: Path) -> List[Path]:
+    """Write one file per team and repository under ``path``.
+
+    Teams go to ``teams/<name>.yaml`` and repositories to
+    ``repos/<name>.yaml``. Existing files are overwritten.
+
+    Returns
+    -------
+    list[Path]
+        The files written.
+    """
+    written: List[Path] = []
+    for subdir, records in (
+        ("teams", [(t.name, team_to_dict(t)) for t in config.teams]),
+        ("repos", [(r.name, repository_to_dict(r)) for r in config.repositories]),
+    ):
+        for name, data in records:
+            target = path / subdir / f"{_file_stem(name)}.yaml"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(dump_record(data), encoding="utf-8")
+            written.append(target)
+    return written
