@@ -15,6 +15,7 @@ This will install the console scripts:
 - `github-repositories`
 - `github-users`
 - `github-repositories-update`
+- `github-repo-maintain`
 
 All tools authenticate with GitHub using the `GITHUB_TOKEN` environment variable (preferred). A local token file may also be used; see `src/c2c_gh_scripts/utils.py`.
 
@@ -65,6 +66,24 @@ The input CSV is usually based on the export from `github-repositories`, with ad
 - `Other actions` (e.g. values containing `to archive` to mark repositories for archiving)
 
 The tool will add topics and teams and archive repositories according to the CSV content.
+
+### `github-repo-maintain`
+
+Run the built-in repository maintenance rules for all non-archived repositories
+in an organisation.
+
+```bash
+github-repo-maintain [--dryrun] <organisation_name>
+```
+
+The rules add the `smartcamp` topic when the `bs-team-smartcamp` team has admin
+access, add the `business` topic when the `business-division` team has admin
+access, and maintain Odoo topics for business repositories based on their
+`odoo/VERSION` file. Odoo topic maintenance adds `odoo-project` and the matching
+`odoo-<major_version>` topic, and removes outdated numeric `odoo-*` topics.
+
+Use `--dryrun` (or `-n`) to log the actions that would be taken without changing
+repositories.
 
 ## Development Notes
 

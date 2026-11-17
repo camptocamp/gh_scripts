@@ -31,6 +31,8 @@ dev = [
 github-repositories = "c2c_gh_scripts.github_repositories:main"
 github-repositories-update = "c2c_gh_scripts.github_repository_update:main"
 github-users = "c2c_gh_scripts.github_users:main"
+github-repo-maintain = "c2c_gh_scripts.github_repo_maintain:main"
+hunt-business-robot = "c2c_gh_scripts.hunt_business_robot:main"
 clear-github-action-cache = "c2c_gh_scripts.clear_github_action_cache:main"
 
 [tool.setuptools]
