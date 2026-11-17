@@ -22,6 +22,7 @@ dependencies = [
 dev = [
   "pre-commit",
   "ruff",
+  "pytest",
 ]
 
 [project.scripts]
@@ -30,6 +31,7 @@ dev = [
 github-repositories = "c2c_gh_scripts.github_repositories:main"
 github-repositories-update = "c2c_gh_scripts.github_repository_update:main"
 github-users = "c2c_gh_scripts.github_users:main"
+clear-github-action-cache = "c2c_gh_scripts.clear_github_action_cache:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
