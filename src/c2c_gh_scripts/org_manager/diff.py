@@ -29,6 +29,9 @@ class Change:
 class CreateTeam(Change):
     name: str
     parent: str = ""
+    # logins which must stay in the team; GitHub makes its creator a
+    # maintainer, who is removed after creation unless listed here
+    logins: Tuple[str, ...] = ()
 
     def describe(self) -> str:
         suffix = f" (parent: {self.parent})" if self.parent else ""
@@ -331,7 +334,13 @@ class _Differ:
         for team in self._ordered_desired_teams():
             current = self.actual_teams.get(team.name)
             if current is None:
-                self.team_changes.append(CreateTeam(team.name, team.parent))
+                self.team_changes.append(
+                    CreateTeam(
+                        team.name,
+                        team.parent,
+                        tuple(sorted(team.maintainers + team.members)),
+                    )
+                )
             elif current.parent != team.parent:
                 self.team_changes.append(SetTeamParent(team.name, team.parent))
 

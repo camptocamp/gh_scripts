@@ -9,6 +9,7 @@ from typing import Any, List, Tuple
 import click
 
 from .org_manager.config import load_config, write_config
+from .org_manager.apply import Executor
 from .org_manager.diff import Plan, compute_changes
 from .org_manager.models import LEVEL_ERROR, Issue, OrgConfig
 from .org_manager.state import load_github_state, load_org_state
@@ -236,9 +237,10 @@ def apply_command(
     org_name: str,
     config_path: Path,
 ) -> None:
-    """Apply the configuration found in CONFIG_PATH to the organisation."""
-    if not dry_run:
-        raise click.ClickException("real runs are not implemented yet, use --dry-run")
+    """Apply the configuration found in CONFIG_PATH to the organisation.
+
+    Exits with status 1 if an error was found or a change failed.
+    """
     logger = setup_logging(LOGGER_NAME)
     try:
         config, issues = load_valid_config(config_path)
@@ -246,8 +248,9 @@ def apply_command(
         log_issues(logger, exc.issues)
         logger.error("configuration is invalid, nothing done")
         sys.exit(1)
+    gh = _build_github_client()
     plan = plan_changes(
-        _build_github_client(),
+        gh,
         org_name,
         config,
         prune_teams=prune_team,
@@ -255,9 +258,18 @@ def apply_command(
         prune_users=prune_user,
     )
     errors = log_issues(logger, issues + plan.issues)
-    for change in plan.changes:
-        logger.info("[dry-run] %s", change.describe())
-    logger.info("%d change(s) to apply", len(plan.changes))
+    if dry_run:
+        for change in plan.changes:
+            logger.info("[dry-run] %s", change.describe())
+        logger.info("%d change(s) to apply", len(plan.changes))
+    else:
+        failures = Executor(gh, org_name, logger).execute(plan.changes)
+        logger.info(
+            "%d change(s) applied, %d failed",
+            len(plan.changes) - len(failures),
+            len(failures),
+        )
+        errors += len(failures)
     if errors:
         sys.exit(1)
 

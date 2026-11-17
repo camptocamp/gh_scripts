@@ -331,9 +331,3 @@ def test_cli_apply_invalid_config_does_not_query_github(tmp_path, monkeypatch, c
     result = CliRunner().invoke(main, ["apply", "-n", "--org", "acme", str(tmp_path)])
     assert result.exit_code == 1
     assert "at least one maintainer" in caplog.text
-
-
-def test_cli_apply_real_run_not_yet_available(tmp_path):
-    result = CliRunner().invoke(main, ["apply", "--org", "acme", str(tmp_path)])
-    assert result.exit_code == 1
-    assert "not implemented" in result.output

@@ -85,6 +85,31 @@ access, and maintain Odoo topics for business repositories based on their
 Use `--dryrun` (or `-n`) to log the actions that would be taken without changing
 repositories.
 
+### `github-org-manager` (`gom`)
+
+Manage the teams and repositories of an organisation from YAML files kept in a
+separate repository. Each file holds one or more records (`type: team` or
+`type: repository`, multi-document files separated by `---`), found recursively
+under the given directory.
+
+```bash
+gom check <path_to_config>
+gom generate --org <org> [-r <repo>]... [-t <team>]... <path_to_config>
+gom apply [-n|--dry-run] [--prune-repo] [--prune-team] [--prune-user] --org <org> <path_to_config>
+```
+
+- `check` validates the configuration and exits with status 1 on errors.
+- `generate` writes `teams/<name>.yaml` and `repos/<name>.yaml` from the current
+  state of the organisation, overwriting existing files.
+- `apply` makes the organisation match the configuration. Repositories which are
+  not configured are logged as warnings (with the file to add) unless
+  `--prune-repo` is given; likewise teams with `--prune-team`. `--prune-user`
+  removes members who are in no configured team (never organisation owners) and
+  outside collaborators not listed in any repository. `-n` only lists the
+  changes. When more seats are needed than the organisation has, the number of
+  missing seats is logged as a warning and the extra users are not invited.
+  The exit status is 1 if any error occurred or any change failed.
+
 ## Development Notes
 
 - Code lives under `src/c2c_gh_scripts/` and uses type hints and dataclasses.
