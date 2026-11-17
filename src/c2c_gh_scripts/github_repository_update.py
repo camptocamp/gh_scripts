@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import argparse
 import csv
-import sys
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -72,7 +72,9 @@ def read_repository_updates(csv_filename: str) -> Dict[str, RepositoryUpdate]:
 
 
 def apply_repository_updates(
-    organisation: str, updates_by_name: Dict[str, RepositoryUpdate]
+    organisation: str,
+    updates_by_name: Dict[str, RepositoryUpdate],
+    dry_run: bool = False,
 ) -> List[Tuple[str, Exception]]:
     """Apply a set of RepositoryUpdate instructions to repositories.
 
@@ -82,6 +84,8 @@ def apply_repository_updates(
         GitHub organisation name.
     updates_by_name: Dict[str, RepositoryUpdate]
         Mapping of repository *names* to update instructions.
+    dry_run: bool
+        When True, log intended changes without modifying any repository.
     """
 
     logger = setup_logging()
@@ -99,7 +103,7 @@ def apply_repository_updates(
             updates.archive,
         )
         try:
-            update_repository(org, name, updates)
+            update_repository(org, name, updates, dry_run=dry_run)
         except Exception as exc:  # noqa: BLE001
             logger.error("Error while updating repository '%s': %s", name, exc)
             errors.append((name, exc))
@@ -107,7 +111,12 @@ def apply_repository_updates(
     return errors
 
 
-def update_repository(org, name: str, updates: RepositoryUpdate) -> None:
+def update_repository(
+    org,
+    name: str,
+    updates: RepositoryUpdate,
+    dry_run: bool = False,
+) -> None:
     """Update a single repository according to RepositoryUpdate.
 
     - Ensure department topic is present on the repository.
@@ -159,10 +168,28 @@ def update_repository(org, name: str, updates: RepositoryUpdate) -> None:
     if "smartcamp" in updates.add_teams:  # Special case for SmartCamp team
         new_topic.append("smartcamp")
     current_topics = list(repo.get_topics() or [])
+    topics_to_add = []
     for topic in new_topic:
+        if not topic:
+            continue
         if topic not in current_topics:
+            topics_to_add.append(topic)
             current_topics.append(topic)
+
+    if topics_to_add:
+        if dry_run:
+            logger.info(
+                "Repository '%s': would add topics: %s",
+                name,
+                ", ".join(topics_to_add),
+            )
+        else:
             repo.replace_topics(current_topics)
+            logger.info(
+                "Repository '%s': added topics: %s",
+                name,
+                ", ".join(topics_to_add),
+            )
 
     # 2. Add teams with the specified access level.
     add_teams_value = (updates.add_teams or "").strip()
@@ -195,37 +222,70 @@ def update_repository(org, name: str, updates: RepositoryUpdate) -> None:
                 continue
 
             # Grant the team the requested permission level on the repo.
-            team.set_repo_permission(repo, access)
+            if dry_run:
+                logger.info(
+                    "Repository '%s': would grant team '%s' access '%s'",
+                    name,
+                    team_name,
+                    access,
+                )
+            else:
+                team.set_repo_permission(repo, access)
+                logger.info(
+                    "Repository '%s': granted team '%s' access '%s'",
+                    name,
+                    team_name,
+                    access,
+                )
 
     # 3. Archive the repository if requested.
     if updates.archive and not repo.archived:
-        repo.edit(archived=True)
+        if dry_run:
+            logger.info("Repository '%s': would archive repository", name)
+        else:
+            repo.edit(archived=True)
+            logger.info("Repository '%s': archived repository", name)
 
 
 def main() -> None:
     """CLI entry point to apply repository updates from a CSV file.
 
-    Expects two arguments:
-    - organisation name (argv[1])
-    - input CSV filename (argv[2])
+    Expects arguments:
+    - optional dry-run flag: -n or --dryrun
+    - organisation name
+    - input CSV filename
     """
 
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <organisation_name> <input_csv>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Apply repository updates from a CSV file.",
+    )
+    parser.add_argument(
+        "-n",
+        "--dryrun",
+        action="store_true",
+        dest="dry_run",
+        help="Log intended changes without modifying repositories.",
+    )
+    parser.add_argument("organisation", help="GitHub organisation name")
+    parser.add_argument("input_csv", help="CSV file containing repository updates")
+    args = parser.parse_args()
 
-    organisation = sys.argv[1]
-    csv_filename = sys.argv[2]
+    organisation = args.organisation
+    csv_filename = args.input_csv
 
     updates_by_name = read_repository_updates(csv_filename)
-    errors = apply_repository_updates(organisation, updates_by_name)
+    errors = apply_repository_updates(
+        organisation,
+        updates_by_name,
+        dry_run=args.dry_run,
+    )
 
     if errors:
         logger = setup_logging()
         logger.error("%d repositories failed to update", len(errors))
         for repo_name, exc in errors:
             logger.error(" - %s: %s", repo_name, exc)
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
