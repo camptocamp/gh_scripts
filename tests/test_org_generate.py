@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 
 import yaml
+from github import UnknownObjectException
 from click.testing import CliRunner
 
 from c2c_gh_scripts import github_org_manager
@@ -52,7 +53,24 @@ class FakeRepo:
 
 class FakeGithub:
     def __init__(self, teams, repos):
-        self._org = NS(get_teams=lambda: teams, get_repos=lambda: repos)
+        def get_team_by_slug(slug):
+            for t in teams:
+                if t.name.lower().replace(" ", "-") == slug:
+                    return t
+            raise UnknownObjectException(404)
+
+        def get_repo(name):
+            for r in repos:
+                if r.name == name:
+                    return r
+            raise UnknownObjectException(404)
+
+        self._org = NS(
+            get_teams=lambda: teams,
+            get_repos=lambda: repos,
+            get_team_by_slug=get_team_by_slug,
+            get_repo=get_repo,
+        )
 
     def get_organization(self, name):
         assert name == "acme"

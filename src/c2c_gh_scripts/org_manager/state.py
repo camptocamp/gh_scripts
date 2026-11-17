@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+
+from github import UnknownObjectException
 
 from .models import (
     ACCESS_LEVELS,
@@ -109,10 +111,12 @@ def _load_config(
     config = OrgConfig()
 
     wanted_teams = set(team_names)
+    if wanted_teams:
+        gh_teams = _fetch_teams(org, wanted_teams)
+    else:
+        gh_teams = list(org.get_teams())
     seen_teams = set()
-    for gh_team in org.get_teams():
-        if wanted_teams and gh_team.name not in wanted_teams:
-            continue
+    for gh_team in gh_teams:
         seen_teams.add(gh_team.name)
         config.teams.append(_load_team(gh_team))
     for missing in sorted(wanted_teams - seen_teams):
@@ -120,9 +124,16 @@ def _load_config(
 
     wanted_repos = set(repo_names)
     seen_repos = set()
-    for gh_repo in org.get_repos():
-        if wanted_repos and gh_repo.name not in wanted_repos:
-            continue
+    if wanted_repos:
+        gh_repos = []
+        for name in sorted(wanted_repos):
+            try:
+                gh_repos.append(org.get_repo(name))
+            except UnknownObjectException:
+                pass
+    else:
+        gh_repos = list(org.get_repos())
+    for gh_repo in gh_repos:
         seen_repos.add(gh_repo.name)
         config.repositories.append(_load_repository(gh_repo, issues))
     for missing in sorted(wanted_repos - seen_repos):
@@ -131,6 +142,26 @@ def _load_config(
         )
 
     return config, issues
+
+
+def _fetch_teams(org: Any, names: Set[str]) -> List[Any]:
+    """Fetch teams by name, using the slug lookup before scanning all teams."""
+    found = []
+    missing = set()
+    for name in sorted(names):
+        slug = "-".join(name.lower().split())
+        try:
+            team = org.get_team_by_slug(slug)
+        except UnknownObjectException:
+            missing.add(name)
+            continue
+        if team.name == name:
+            found.append(team)
+        else:
+            missing.add(name)
+    if missing:
+        found.extend(t for t in org.get_teams() if t.name in missing)
+    return found
 
 
 def _load_team(gh_team: Any) -> Team:
