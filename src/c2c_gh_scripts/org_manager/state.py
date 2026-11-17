@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from github import UnknownObjectException
@@ -44,6 +45,9 @@ def _user_access(user: Any) -> Optional[str]:
             if getattr(permissions, level, False):
                 return level
     return None
+
+
+LOGGER = logging.getLogger("github-org-manager.state")
 
 
 def load_github_state(
@@ -117,6 +121,7 @@ def _load_config(
         gh_teams = list(org.get_teams())
     seen_teams = set()
     for gh_team in gh_teams:
+        LOGGER.info("Processing team %s", gh_team.name)
         seen_teams.add(gh_team.name)
         config.teams.append(_load_team(gh_team))
     for missing in sorted(wanted_teams - seen_teams):
@@ -134,6 +139,7 @@ def _load_config(
     else:
         gh_repos = list(org.get_repos())
     for gh_repo in gh_repos:
+        LOGGER.info("Processing repository %s", gh_repo.name)
         seen_repos.add(gh_repo.name)
         config.repositories.append(_load_repository(gh_repo, issues))
     for missing in sorted(wanted_repos - seen_repos):
