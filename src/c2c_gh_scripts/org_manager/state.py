@@ -9,7 +9,9 @@ from .models import (
     LEVEL_WARNING,
     Issue,
     OrgConfig,
+    OrgState,
     Repository,
+    SeatInfo,
     Team,
 )
 
@@ -67,7 +69,42 @@ def load_github_state(
         The current state, and warnings about anything that cannot be
         represented in the configuration format.
     """
+    return _load_config(gh.get_organization(org_name), org_name, repo_names, team_names)
+
+
+def load_org_state(gh: Any, org_name: str) -> Tuple[OrgState, List[Issue]]:
+    """Read teams, repositories, members and seats of an organisation.
+
+    Returns
+    -------
+    tuple[OrgState, list[Issue]]
+        The current state, and warnings about anything that cannot be
+        represented in the configuration format.
+    """
     org = gh.get_organization(org_name)
+    config, issues = _load_config(org, org_name, (), ())
+    state = OrgState(
+        config=config,
+        members=[u.login for u in org.get_members()],
+        owners=[u.login for u in org.get_members(role="admin")],
+        outside_collaborators=[u.login for u in org.get_outside_collaborators()],
+        pending_invitations=[
+            i.login for i in org.invitations() if getattr(i, "login", None)
+        ],
+    )
+    plan = getattr(org, "plan", None)
+    seats = getattr(plan, "seats", None)
+    if seats:
+        state.seats = SeatInfo(total=seats, filled=getattr(plan, "filled_seats", 0))
+    return state, issues
+
+
+def _load_config(
+    org: Any,
+    org_name: str,
+    repo_names: Iterable[str],
+    team_names: Iterable[str],
+) -> Tuple[OrgConfig, List[Issue]]:
     issues: List[Issue] = []
     config = OrgConfig()
 

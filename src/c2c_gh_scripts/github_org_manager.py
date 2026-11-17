@@ -9,8 +9,9 @@ from typing import Any, List, Tuple
 import click
 
 from .org_manager.config import load_config, write_config
-from .org_manager.models import LEVEL_ERROR, Issue
-from .org_manager.state import load_github_state
+from .org_manager.diff import Plan, compute_changes
+from .org_manager.models import LEVEL_ERROR, Issue, OrgConfig
+from .org_manager.state import load_github_state, load_org_state
 from .org_manager.validation import validate
 from .utils import _build_github_client, setup_logging
 
@@ -89,6 +90,66 @@ def generate_configuration(
     return len(written), issues
 
 
+class InvalidConfiguration(Exception):
+    """The configuration does not pass the checks."""
+
+    def __init__(self, issues: List[Issue]) -> None:
+        super().__init__("invalid configuration")
+        self.issues = issues
+
+
+def load_valid_config(config_path: Path) -> Tuple[OrgConfig, List[Issue]]:
+    """Load the configuration, which must pass the checks.
+
+    Returns
+    -------
+    tuple[OrgConfig, list[Issue]]
+        The configuration and its warnings.
+
+    Raises
+    ------
+    InvalidConfiguration
+        If the configuration has errors.
+    """
+    config, issues = load_config(config_path)
+    issues.extend(validate(config))
+    if any(i.level == LEVEL_ERROR for i in issues):
+        raise InvalidConfiguration(issues)
+    return config, issues
+
+
+def plan_changes(
+    gh: Any,
+    org_name: str,
+    config: OrgConfig,
+    prune_teams: bool = False,
+    prune_repos: bool = False,
+    prune_users: bool = False,
+) -> Plan:
+    """Compare the configuration with the organisation.
+
+    Parameters
+    ----------
+    gh: github.Github
+        Authenticated GitHub client.
+    org_name: str
+        Name of the organisation.
+    config: OrgConfig
+        The validated target configuration.
+    prune_teams, prune_repos, prune_users: bool
+        Allow deleting teams, repositories, and removing users.
+
+    Returns
+    -------
+    Plan
+        The changes to apply and the problems found.
+    """
+    state, state_issues = load_org_state(gh, org_name)
+    plan = compute_changes(config, state, prune_teams, prune_repos, prune_users)
+    plan.issues = state_issues + plan.issues
+    return plan
+
+
 @main.command("check")
 @click.argument(
     "config_path",
@@ -141,6 +202,64 @@ def generate_command(
     )
     log_issues(logger, issues)
     logger.info("wrote %d file(s) to %s", count, config_path)
+
+
+@main.command("apply")
+@click.option(
+    "-n",
+    "--dry-run",
+    "dry_run",
+    is_flag=True,
+    help="List the changes without applying them.",
+)
+@click.option(
+    "--prune-repo", is_flag=True, help="Delete repositories missing from the config."
+)
+@click.option(
+    "--prune-team", is_flag=True, help="Delete teams missing from the config."
+)
+@click.option(
+    "--prune-user",
+    is_flag=True,
+    help="Remove members in no configured team, and unlisted outside collaborators.",
+)
+@click.option("--org", "org_name", required=True, help="Organisation name.")
+@click.argument(
+    "config_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+)
+def apply_command(
+    dry_run: bool,
+    prune_repo: bool,
+    prune_team: bool,
+    prune_user: bool,
+    org_name: str,
+    config_path: Path,
+) -> None:
+    """Apply the configuration found in CONFIG_PATH to the organisation."""
+    if not dry_run:
+        raise click.ClickException("real runs are not implemented yet, use --dry-run")
+    logger = setup_logging(LOGGER_NAME)
+    try:
+        config, issues = load_valid_config(config_path)
+    except InvalidConfiguration as exc:
+        log_issues(logger, exc.issues)
+        logger.error("configuration is invalid, nothing done")
+        sys.exit(1)
+    plan = plan_changes(
+        _build_github_client(),
+        org_name,
+        config,
+        prune_teams=prune_team,
+        prune_repos=prune_repo,
+        prune_users=prune_user,
+    )
+    errors = log_issues(logger, issues + plan.issues)
+    for change in plan.changes:
+        logger.info("[dry-run] %s", change.describe())
+    logger.info("%d change(s) to apply", len(plan.changes))
+    if errors:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

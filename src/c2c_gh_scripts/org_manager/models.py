@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 ACCESS_LEVELS = ("pull", "triage", "push", "maintain", "admin")
 VISIBILITIES = ("public", "private")
@@ -57,3 +57,27 @@ class OrgConfig:
 
     teams: List[Team] = field(default_factory=list)
     repositories: List[Repository] = field(default_factory=list)
+
+
+@dataclass
+class SeatInfo:
+    """Seats of the organisation plan."""
+
+    total: int
+    filled: int
+
+    @property
+    def available(self) -> int:
+        return max(0, self.total - self.filled)
+
+
+@dataclass
+class OrgState:
+    """The current state of an organisation, as read from GitHub."""
+
+    config: OrgConfig = field(default_factory=OrgConfig)
+    members: List[str] = field(default_factory=list)
+    owners: List[str] = field(default_factory=list)
+    outside_collaborators: List[str] = field(default_factory=list)
+    pending_invitations: List[str] = field(default_factory=list)
+    seats: Optional[SeatInfo] = None
