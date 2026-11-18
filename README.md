@@ -94,13 +94,16 @@ under the given directory.
 
 ```bash
 gom check <path_to_config>
-gom generate --org <org> [-r <repo>]... [-t <team>]... <path_to_config>
+gom generate --org <org> [-r <repo>]... [-t <team>]... [--report <file>] <path_to_config>
 gom apply [-n|--dry-run] [--prune-repo] [--prune-team] [--prune-user] --org <org> <path_to_config>
 ```
 
 - `check` validates the configuration and exits with status 1 on errors.
 - `generate` writes `teams/<name>.yaml` and `repos/<name>.yaml` from the current
-  state of the organisation, overwriting existing files.
+  state of the organisation, overwriting existing files. It then prints a report
+  of empty teams, users without a team (with the repositories they can access),
+  repositories without teams and repositories without an admin team; `--report`
+  also saves it to a file.
 - `apply` makes the organisation match the configuration. Repositories which are
   not configured are logged as warnings (with the file to add) unless
   `--prune-repo` is given; likewise teams with `--prune-team`. `--prune-user`

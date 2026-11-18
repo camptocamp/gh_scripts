@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 import click
 
@@ -12,6 +12,7 @@ from .org_manager.config import load_config, write_config
 from .org_manager.apply import Executor
 from .org_manager.diff import Plan, compute_changes
 from .org_manager.models import LEVEL_ERROR, Issue, OrgConfig
+from .org_manager.report import build_report
 from .org_manager.state import load_github_state, load_org_state
 from .org_manager.validation import validate
 from .utils import _build_github_client, setup_logging
@@ -84,11 +85,25 @@ def generate_configuration(
         checked on complete exports, since a partial one lacks the records
         it refers to.
     """
+    count, issues, _ = export_configuration(
+        gh, org_name, config_path, repo_names, team_names
+    )
+    return count, issues
+
+
+def export_configuration(
+    gh: Any,
+    org_name: str,
+    config_path: Path,
+    repo_names: Tuple[str, ...] = (),
+    team_names: Tuple[str, ...] = (),
+) -> Tuple[int, List[Issue], OrgConfig]:
+    """Like ``generate_configuration``, also returning the exported state."""
     config, issues = load_github_state(gh, org_name, repo_names, team_names)
     written = write_config(config, config_path)
     if not repo_names and not team_names:
         issues.extend(validate(config))
-    return len(written), issues
+    return len(written), issues, config
 
 
 class InvalidConfiguration(Exception):
@@ -186,23 +201,36 @@ def check_command(config_path: Path) -> None:
     multiple=True,
     help="Team to export (repeatable). All teams by default.",
 )
+@click.option(
+    "--report",
+    "report_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Also save the report on teams and repositories to this file.",
+)
 @click.argument("config_path", type=click.Path(file_okay=False, path_type=Path))
 def generate_command(
     org_name: str,
     repo_names: Tuple[str, ...],
     team_names: Tuple[str, ...],
+    report_path: Optional[Path],
     config_path: Path,
 ) -> None:
     """Write the current state of the organisation into CONFIG_PATH.
 
-    Existing definition files are overwritten.
+    Existing definition files are overwritten. A report on empty teams, users
+    without a team and repositories without teams or admin team is printed.
     """
     logger = setup_logging(LOGGER_NAME)
-    count, issues = generate_configuration(
+    count, issues, config = export_configuration(
         _build_github_client(), org_name, config_path, repo_names, team_names
     )
     log_issues(logger, issues)
     logger.info("wrote %d file(s) to %s", count, config_path)
+    report = build_report(config)
+    click.echo(report)
+    if report_path is not None:
+        report_path.write_text(report)
+        logger.info("report saved to %s", report_path)
 
 
 @main.command("apply")
