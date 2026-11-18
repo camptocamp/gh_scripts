@@ -253,25 +253,88 @@ def dump_record(record: Dict[str, Any]) -> str:
     return yaml.safe_dump(record, sort_keys=False, allow_unicode=True)
 
 
-def write_config(config: OrgConfig, path: Path) -> List[Path]:
-    """Write one file per team and repository under ``path``.
+def _read_documents(file: Path) -> List[Any]:
+    return list(yaml.safe_load_all(file.read_text(encoding="utf-8")))
 
-    Teams go to ``teams/<name>.yaml`` and repositories to
-    ``repos/<name>.yaml``. Existing files are overwritten.
+
+def _write_documents(file: Path, documents: List[Any]) -> None:
+    file.parent.mkdir(parents=True, exist_ok=True)
+    if len(documents) == 1:
+        text = dump_record(documents[0])
+    else:
+        text = yaml.safe_dump_all(
+            documents, sort_keys=False, allow_unicode=True, explicit_start=True
+        )
+    file.write_text(text, encoding="utf-8")
+
+
+def write_config(config: OrgConfig, path: Path) -> List[Path]:
+    """Write the teams and repositories of ``config`` under ``path``.
+
+    A record which already exists in a file under ``path`` (single or
+    multi-document) is updated in place, keeping the layout of the files and
+    the order of the documents. Files whose records did not change are left
+    untouched. Other records are written to ``teams/<name>.yaml`` and
+    ``repos/<name>.yaml``, appended as a new document if that file exists.
+    Records found in files but absent from ``config`` are kept as is.
 
     Returns
     -------
     list[Path]
-        The files written.
+        The files created or modified.
+
+    Raises
+    ------
+    ValueError
+        If a file which must be updated cannot be parsed.
     """
-    written: List[Path] = []
-    for subdir, records in (
-        ("teams", [(t.name, team_to_dict(t)) for t in config.teams]),
-        ("repos", [(r.name, repository_to_dict(r)) for r in config.repositories]),
+    documents: Dict[Path, List[Any]] = {}
+    location: Dict[Tuple[str, str], Tuple[Path, int]] = {}
+    broken: Dict[Path, str] = {}
+    if path.is_dir():
+        for file in find_config_files(path):
+            try:
+                docs = _read_documents(file)
+            except (yaml.YAMLError, UnicodeDecodeError) as exc:
+                broken[file] = str(exc)
+                continue
+            documents[file] = docs
+            for index, doc in enumerate(docs):
+                if isinstance(doc, dict) and isinstance(doc.get("name"), str):
+                    location.setdefault(
+                        (str(doc.get("type")), doc["name"]), (file, index)
+                    )
+
+    changed: List[Path] = []
+
+    def touch(file: Path) -> None:
+        if file not in changed:
+            changed.append(file)
+
+    for kind, subdir, records in (
+        ("team", "teams", [(t.name, team_to_dict(t)) for t in config.teams]),
+        (
+            "repository",
+            "repos",
+            [(r.name, repository_to_dict(r)) for r in config.repositories],
+        ),
     ):
         for name, data in records:
-            target = path / subdir / f"{_file_stem(name)}.yaml"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(dump_record(data), encoding="utf-8")
-            written.append(target)
-    return written
+            found = location.get((kind, name))
+            if found is not None:
+                file, index = found
+                if documents[file][index] != data:
+                    documents[file][index] = data
+                    touch(file)
+                continue
+            file = path / subdir / f"{_file_stem(name)}.yaml"
+            if file in broken:
+                raise ValueError(f"cannot update {file}: {broken[file]}")
+            docs = documents.setdefault(file, [])
+            docs.append(data)
+            location[(kind, name)] = (file, len(docs) - 1)
+            touch(file)
+
+    for file in changed:
+        _write_documents(file, documents[file])
+    return changed

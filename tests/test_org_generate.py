@@ -148,11 +148,33 @@ def test_generate_filters_and_missing_names(tmp_path):
     assert not any(i.level == "ERROR" for i in issues)
 
 
-def test_generate_overwrites_existing_files(tmp_path):
-    (tmp_path / "teams").mkdir()
-    (tmp_path / "teams" / "core.yaml").write_text("stale: true\n")
+def test_generate_updates_existing_layout(tmp_path):
+    (tmp_path / "org").mkdir()
+    (tmp_path / "org" / "all.yml").write_text(
+        "type: team\nname: other\nmembers: [z]\n---\n"
+        "type: team\nname: core\nmembers: [stale]\n---\n"
+        "type: repository\nname: tool\n"
+    )
+    untouched = tmp_path / "org" / "keep.yaml"
+    untouched.write_text("# comment\ntype: team\nname: other2\n")
     generate_configuration(make_github(), "acme", tmp_path)
-    assert "stale" not in (tmp_path / "teams" / "core.yaml").read_text()
+
+    docs = list(yaml.safe_load_all((tmp_path / "org" / "all.yml").read_text()))
+    assert [d["name"] for d in docs] == ["other", "core", "tool"]
+    assert docs[0]["members"] == ["z"]
+    assert "stale" not in docs[1]["members"]
+    assert docs[2]["visibility"] == "private"
+    assert untouched.read_text().startswith("# comment")
+    assert not (tmp_path / "teams" / "core.yaml").exists()
+    assert not (tmp_path / "repos" / "tool.yaml").exists()
+
+
+def test_generate_appends_to_existing_default_file(tmp_path):
+    (tmp_path / "teams").mkdir()
+    (tmp_path / "teams" / "core.yaml").write_text("type: team\nname: other\n")
+    generate_configuration(make_github(), "acme", tmp_path)
+    docs = list(yaml.safe_load_all((tmp_path / "teams" / "core.yaml").read_text()))
+    assert [d["name"] for d in docs] == ["other", "core"]
 
 
 def test_unsupported_permissions_and_visibility_warn(tmp_path):

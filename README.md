@@ -100,7 +100,9 @@ gom apply [-n|--dry-run] [--prune-repo] [--prune-team] [--prune-user] --org <org
 
 - `check` validates the configuration and exits with status 1 on errors.
 - `generate` writes `teams/<name>.yaml` and `repos/<name>.yaml` from the current
-  state of the organisation, overwriting existing files. It then prints a report
+  state of the organisation. Records already defined in the target directory
+  (in any file, single or multi-document) are updated in place, preserving the
+  layout and order; only new ones get a file of their own. It then prints a report
   of empty teams, users without a team (with the repositories they can access),
   repositories without teams and repositories without an admin team; `--report`
   also saves it to a file.

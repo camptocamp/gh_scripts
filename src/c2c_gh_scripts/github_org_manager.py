@@ -100,7 +100,10 @@ def export_configuration(
 ) -> Tuple[int, List[Issue], OrgConfig]:
     """Like ``generate_configuration``, also returning the exported state."""
     config, issues = load_github_state(gh, org_name, repo_names, team_names)
-    written = write_config(config, config_path)
+    try:
+        written = write_config(config, config_path)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     if not repo_names and not team_names:
         issues.extend(validate(config))
     return len(written), issues, config
@@ -217,7 +220,8 @@ def generate_command(
 ) -> None:
     """Write the current state of the organisation into CONFIG_PATH.
 
-    Existing definition files are overwritten. A report on empty teams, users
+    Records already defined under CONFIG_PATH are updated in the file where they
+    are defined; new ones go to teams/ or repos/. A report on empty teams, users
     without a team and repositories without teams or admin team is printed.
     """
     logger = setup_logging(LOGGER_NAME)
