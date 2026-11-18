@@ -18,6 +18,7 @@ def sample() -> OrgConfig:
         repositories=[
             Repository(name="a", teams={"core": "admin"}, users={"alice": "push"}),
             Repository(name="b", teams={"core": "push"}, users={"carol": "pull"}),
+            Repository(name="old", archived=True),
             Repository(name="c", users={"carol": "admin", "dave": "pull"}),
         ],
     )

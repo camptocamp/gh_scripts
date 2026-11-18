@@ -12,7 +12,8 @@ def build_report(config: OrgConfig) -> str:
 
     Only what is in ``config`` is considered: users are the ones granted direct
     access to a repository, so organisation members who are in no team and have
-    no direct access are not listed. On a partial export the lists are
+    no direct access are not listed. Archived repositories are excluded from the
+    two repository lists. On a partial export the lists are
     incomplete.
 
     Returns
@@ -39,9 +40,10 @@ def build_report(config: OrgConfig) -> str:
         for login, repos in sorted(user_repos.items(), key=lambda i: i[0].lower())
     ]
 
-    repos_without_team = sorted(r.name for r in config.repositories if not r.teams)
+    active = [r for r in config.repositories if not r.archived]
+    repos_without_team = sorted(r.name for r in active if not r.teams)
     repos_without_admin = sorted(
-        r.name for r in config.repositories if "admin" not in r.teams.values()
+        r.name for r in active if "admin" not in r.teams.values()
     )
 
     sections = [

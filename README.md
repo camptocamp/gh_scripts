@@ -104,7 +104,7 @@ gom apply [-n|--dry-run] [--prune-repo] [--prune-team] [--prune-user] --org <org
   (in any file, single or multi-document) are updated in place, preserving the
   layout and order; only new ones get a file of their own. It then prints a report
   of empty teams, users without a team (with the repositories they can access),
-  repositories without teams and repositories without an admin team; `--report`
+  active (non-archived) repositories without teams or without an admin team; `--report`
   also saves it to a file.
 - `apply` makes the organisation match the configuration. Repositories which are
   not configured are logged as warnings (with the file to add) unless
